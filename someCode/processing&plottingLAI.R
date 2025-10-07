@@ -11,3 +11,4 @@ big_dt$ID <- match(paste(big_dt$x, big_dt$y), unique(paste(big_dt$x, big_dt$y)))
 lai_plot <- ggplot(big_dt, aes(x = date, y = LAI, group = ID, color = factor(ID))) +
   geom_line(size = 0.8)
 
+lai_plot
