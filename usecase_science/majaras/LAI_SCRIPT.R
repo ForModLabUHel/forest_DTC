@@ -15,7 +15,7 @@ library(dplyr)
 base_dir<- "C:/Users/iacom/Desktop/COPERNICUS_LAI"
 setwd(base_dir)
 
-aoi_path <- file.path(base_dir, "INPUT/AOI/Bounding_Box.shp")
+aoi_path<- file.path(base_dir, "INPUT/AOI/Bounding_Box.shp")
 out_dir <- file.path(base_dir, "OUTPUT_LAI")  # the folder where you save GeoTIFF and metadata
 nc_dir<- file.path(base_dir, "INPUT/nc_files")  # the foldere where you have .nc files
 
