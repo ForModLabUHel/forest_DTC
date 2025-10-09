@@ -362,17 +362,30 @@ st_write(sf_lai, "C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT_LAI/LAI_points.gp
 #Create an unique ID for each coordinate pair
 big_dt$ID <- match(paste(big_dt$x, big_dt$y), unique(paste(big_dt$x, big_dt$y)))
 
+#"date" is into Date format
+big_dt[, date := as.Date(date)]
+#Create a daily sequence for each ID
+daily_dt <- big_dt[, .(
+  date = seq(min(date), max(date), by = "day")
+), by = ID]
+
+#Interpolation for each ID
+lai_daily <- big_dt[daily_dt, on = .(ID, date), roll = "nearest"]
+lai_daily[, LAI := approx(x = big_dt[ID == .BY$ID]$date,
+                          y = big_dt[ID == .BY$ID]$LAI,
+                          xout = date)$y, by = ID]
 library(ggplot2)
 library(dplyr)
 
 #Plot
-lai_plot <- ggplot(big_dt, aes(x = date, y = LAI, group = ID, colour = factor(ID))) +
+lai_plot <- ggplot(lai_daily, aes(x = date, y = LAI, group = ID, colour = factor(ID))) +
   geom_line(size = 0.8) + 
   theme_minimal() +
   labs(title = "Time Trend LAI",
        x = "Year",
        y = "LAI",
-       colour = "ID")
+       colour = "ID") + 
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")
 
 lai_plot
 
