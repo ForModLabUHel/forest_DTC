@@ -16,19 +16,18 @@ base_dir<- "C:/Users/iacom/Desktop/COPERNICUS_LAI"
 setwd(base_dir)
 
 aoi_path <- file.path(base_dir, "INPUT/AOI/Bounding_Box.shp")
-out_dir <- file.path(base_dir, "OUTPUT_LAI")  # the folder where you save GeoTIFF and metadata
-lai_dir<- file.path(base_dir, "INPUT/nc_files/LAI")  # the foldere where you have .nc files
+out_dir <- file.path(base_dir, "OUTPUT")  # the folder where you save GeoTIFF and metadata
+dir.create(out_dir, showWarnings = FALSE)
 
 #setting with resolution and LAI_scale factors
 my_resolution <- 300
 LAI_scaling_factor <- 30
 
-file.exists(aoi_path)
-file.exists(lai_dir)
-
 #---------------------------------------------------------------------
 #create a LAI folder
+nc_dir<- file.path(base_dir, "INPUT/nc_files")
 setwd(nc_dir)
+
 dir.create(file.path(nc_dir, "LAI"), showWarnings = FALSE)
 all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
 file_LAI <- all_files[grepl("__LAI\\.nc$", basename(all_files))]
@@ -36,136 +35,80 @@ for (file in file_LAI) {
   file.rename(file, file.path(nc_dir, "LAI", basename(file)))
 }
 lai_dir<- file.path(nc_dir, "INPUT/LAI")
+
+#create LENGTH AFTER folder
+setwd(nc_dir)
+dir.create(file.path(nc_dir, "LENGTH_AFTER"), showWarnings = FALSE)
+all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
+file_LENGTH_AFTER <- all_files[grepl("__LENGTH_AFTER\\.nc$", basename(all_files))]
+for (file in file_LENGTH_AFTER) {
+  file.rename(file, file.path(nc_dir, "LENGTH_AFTER", basename(file)))
+}
+LENGTH_AFTER_dir<- file.path(nc_dir, "INPUT/LENGTH_AFTER")
+
+#create LENGTH BEFORE folder
+setwd(nc_dir)
+dir.create(file.path(nc_dir, "LENGTH_BEFORE"), showWarnings = FALSE)
+all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
+file_LENGTH_BEFORE <- all_files[grepl("__LENGTH_BEFORE\\.nc$", basename(all_files))]
+for (file in file_LENGTH_BEFORE) {
+  file.rename(file, file.path(nc_dir, "LENGTH_BEFORE", basename(file)))
+}
+LENGTH_BEFORE_dir<- file.path(nc_dir, "INPUT/LENGTH_BEFORE")
+
+#create NOBS folder
+setwd(nc_dir)
+dir.create(file.path(nc_dir, "NOBS"), showWarnings = FALSE)
+all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
+file_NOBS <- all_files[grepl("__NOBS\\.nc$", basename(all_files))]
+for (file in file_NOBS) {
+  file.rename(file, file.path(nc_dir, "NOBS", basename(file)))
+}
+NOBS_dir<- file.path(nc_dir, "INPUT/NOBS")
+
+#create QFLAG folder
+setwd(nc_dir)
+dir.create(file.path(nc_dir, "QFLAG"), showWarnings = FALSE)
+all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
+file_QFLAG <- all_files[grepl("__QFLAG\\.nc$", basename(all_files))]
+for (file in file_QFLAG) {
+  file.rename(file, file.path(nc_dir, "QFLAG", basename(file)))
+}
+QFLAG_dir<- file.path(nc_dir, "INPUT/QFLAG")
+
+#create RMSE folder
+setwd(nc_dir)
+dir.create(file.path(nc_dir, "RMSE"), showWarnings = FALSE)
+all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
+file_RMSE <- all_files[grepl("__RMSE\\.nc$", basename(all_files))]
+for (file in file_RMSE) {
+  file.rename(file, file.path(nc_dir, "RMSE", basename(file)))
+}
+RMSE_dir<- file.path(nc_dir, "INPUT/RMSE")
+
 #--------------------------------------------------------------------
 
+#Variables folders
+var_dirs <- list(
+  LAI          = file.path(base_dir, "INPUT/nc_files/LAI"),  # the foldere where you have .nc files
+  LENGTH_AFTER = file.path(base_dir, "INPUT/nc_files/LENGTH_AFTER"),
+  LENGTH_BEFORE= file.path(base_dir, "INPUT/nc_files/LENGTH_BEFORE"),
+  NOBS         = file.path(base_dir, "INPUT/nc_files/NOBS"),
+  QFLAG        = file.path(base_dir, "INPUT/nc_files/QFLAG"),
+  RMSE         = file.path(base_dir, "INPUT/nc_files/RMSE")
+)
 #if you don't have it, create output folder
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 #move the directory to OUTPUT_LAI where I'll save the results
 setwd(out_dir)
 
-cat("Directory di lavoro impostato su:", getwd(), "\n")
-cat("AOI", aoi_path, "\n")
-cat("LAI in:", lai_dir, "\n")
-cat("OUTPUT_LAI in:", out_dir, "\n")
-
-#Verify that AOI and file.nc exist
-if(!file.exists(aoi_path)) stop("AOI non trovato! Controlla il percorso:", aoi_path)
-if(!file.exists(lai_dir)) stop("LAI non trovata! Controlla il percorso:", lai_dir)
-
-# List file .nc 
-#lai_dir is the folder where I put all the files .nc (YEARS)
-#list.files() searches for all files ending in .nc
-#full.names=TRUE returns the full path
-#recursive=TRUE lokks in the sub folders
-lai_files <- list.files(path = lai_dir, pattern = "\\.nc$", full.names = TRUE, recursive = TRUE)
-cat("Trovati", length(lai_files), "File .nc in", lai_dir, "\n")
-head(lai_files, 3)
+library(data.table)
 
 # Read AOI and take to EPSG:4326
 aoi_sf <- st_read(aoi_path, quiet = TRUE)
 aoi_sf <- st_transform(aoi_sf, 4326)
 aoi_vect <- terra::vect(aoi_sf)
-
-# utility: extracts the date from the filename (handles 12, 8, 6 digits)
-extract_date_from_filename <- function(fname){
-  # try pattern 12 (es: 201601100000), then 8 (20160110), and then 6 (201601)
-  m12 <- regmatches(fname, regexpr("\\d{12}", fname))
-  if(length(m12)==1 && nchar(m12)==12) {
-    date_str <- substr(m12, 1, 8)
-    return(as.Date(date_str, "%Y%m%d"))
-  }
-  m8 <- regmatches(fname, regexpr("\\d{8}", fname))
-  if(length(m8)==1 && nchar(m8)==8){
-    return(as.Date(m8, "%Y%m%d"))
-  }
-  m6 <- regmatches(fname, regexpr("\\d{6}", fname))
-  if(length(m6)==1 && nchar(m6)==6){
-    # Take YYYYMM -> before the month
-    return(as.Date(paste0(m6, "01"), "%Y%m%d"))
-  }
-  return(NA)
-}
-
-# this function process a single netCDF
-# it's a custom function that:
-#1. receives the path to a .nc (nc_path) file as input
-#2. reads data inside the file
-#3. processes them
-#4. the name of the generated GeoTIFF file returns
-process_one_nc <- function(nc_path, aoi_vect, resolution, extract_qc = FALSE) {
-  cat("Processing:", nc_path, "...\n")
-  # 1) opens the NetCDF file with "nc_open()" and handles errors with "try()"
-  nc <- try(nc_open(nc_path), silent = TRUE)
-  if(inherits(nc, "try-error")){
-    warning("Impossibile aprire:", nc_path) 
-    return(NULL)
-  }
-  #identify variable LAI
-  vars <- names(nc$var)
-  # look for the variable containing LAI (case-insensitive) among the NetCDF variables
-  lai_var <- vars[grepl("^LAI$|LAI", vars, ignore.case = TRUE)][1]
-  if(is.na(lai_var)){
-    warning("Variabile LAI non trovata in ", nc_path)
-    nc_close(nc)
-    return(NULL)
-  }
-  
-  #above it open the .nc file,looks at what variables there are inside (es. LAI, NOBS, RMSE,..)
-  #look for the variable that contains the LAI dataand if it doesn't find it, it will warn you
-  
-  # Reads useful attributes (scale/_FillValue) using "ncatt_get()"
-  scale_att <- try(ncatt_get(nc, lai_var, "scale_factor"), silent = TRUE)
-  scale_factor <- if(is.list(scale_att) && !is.null(scale_att$value)) as.numeric(scale_att$value) else NA
-  fill_att <- try(ncatt_get(nc, lai_var, "_FillValue"), silent = TRUE)
-  fillv <- if(is.list(fill_att) && !is.null(fill_att$value)) as.numeric(fill_att$value) else NA
-  nc_close(nc) #close the .nc file
-  
-  # 2) Reads the variable as raster with "terra" (read the LAI variables as raster,that is a numerical map)
-  #each pixel of the raster rappresents a value of LAI
-  r <- try(rast(nc_path, subds = lai_var), silent = TRUE)
-  if(inherits(r, "try-error")){
-    r <- try(rast(nc_path), silent = TRUE)
-    if(inherits(r, "try-error")){
-      warning("terra non riesce a leggere il file:", nc_path)
-      return(NULL)
-    }
-    # se il file ha più layer, prova a scegliere il primo
-    if(nlyr(r) > 1) r <- raster::subset(r, 1)
-  }
-  
-  # 3) it applies "scale" and "fill" to correct because some .nc files save data multiplied by a factor (e.g. 0.001)
-  #it applies the scale_factor and replaces "empty" (FillValue) values with NA (missing)
-  if(!is.na(scale_factor)) r <- r * scale_factor
-  if(!is.na(fillv)) r[r == fillv] <- NA
-  
-  # 4) if 300m (PROBA-V) it applies shift mezza-pixel (dx/dy= +or- 1/672°)
-  if(resolution == my_resolution){
-    # shift = 1/(336*2) gradi ≈ 1/672
-    xshift <- 1/672
-    yshift <- 1/672
-    r <- shift(r, dx = -xshift, dy = yshift)
-  }
-  
-  # 5) "crop" (cut the raster to AOI limits (reduce size) 
-  #& "mask" (puts everything outside the AOI perimeter to NA)
-  #Result: only data within my area
-  r_crop <- crop(r, aoi_vect, snap = "out")
-  r_mask <- mask(r_crop, aoi_vect)
-  
-  # 6) extracts the date from filename to nome the output
-  fname <- basename(nc_path)
-  date_val <- extract_date_from_filename(fname)
-  if(is.na(date_val)){
-    outname <- file.path(getwd(), paste0("LAI_", tools::file_path_sans_ext(fname), ".tif"))
-  } else {
-    outname <- file.path(getwd(), sprintf("LAI_%s.tif", format(date_val, "%Y%m%d")))
-  }
-  writeRaster(r, filename = outname, overwrite = TRUE)
-  return(outname)
-}
-
-cat("FINE pipeline.\n")
 
 ##################################################################################################
 # From .nc files, now I have to crate a .RData file with latitude, longitude, dates and LAI values
@@ -187,7 +130,7 @@ cat("FINE pipeline.\n")
 
 # -------------------------- PARAMETERS to change -------------------------
 #the directory of nc and out has already been set
-out_dir <- file.path(base_dir, "OUTPUT_LAI")  # where save GeoTIFF, metadata and .rds / .RData
+out_dir <- file.path(base_dir, "OUTPUT")  # where save GeoTIFF, metadata and .rds / .RData
 lai_dir<- file.path(base_dir, "INPUT/nc_files/LAI")  # the folder where there are .nc files
 
 save_intermediate_rds <- TRUE                  # save every files like .rds (reduces RAM)
@@ -201,22 +144,26 @@ aoi_path <- NA # e.g. "C:/Progetti_LAI/input/aoi/aoi.shp" oppure NA
 # function to extract the date from file name estrarre la data dal nome file (supports 12,8,6 digits)
 extract_date_from_filename <- function(fname){
   m12 <- regmatches(fname, regexpr("\\d{12}", fname))
-  if(length(m12)==1 && nchar(m12)==12){
-    return(as.Date(substr(m12,1,8), "%Y%m%d"))
+  if(length(m12) == 1 && nchar(m12) == 12){
+    return(as.Date(substr(m12, 1, 8), format = "%Y%m%d"))
   }
   m8 <- regmatches(fname, regexpr("\\d{8}", fname))
-  if(length(m8)==1 && nchar(m8)==8){
-    return(as.Date(m8, "%Y%m%d"))
+  if(length(m8) == 1 && nchar(m8) == 8){
+    return(as.Date(m8, format = "%Y%m%d"))
   }
   m6 <- regmatches(fname, regexpr("\\d{6}", fname))
-  if(length(m6)==1 && nchar(m6)==6){
-    return(as.Date(paste0(m6,"01"), "%Y%m%d"))
+  if(length(m6) == 1 && nchar(m6) == 6){
+    return(as.Date(paste0(m6,"01"), format = "%Y%m%d"))
   }
   return(NA)
 }
 
 # list file .nc
-lai_files <- list.files(path = lai_dir, pattern = "\\.nc$|\\.NC$|\\.nc4$", full.names = TRUE, recursive = TRUE)
+lai_files <- list.files(path = lai_dir, pattern = "\\.nc$", full.names = TRUE, recursive = TRUE)
+sapply(lai_files, extract_date_from_filename)
+str(lai_dates)
+range(lai_dates)
+table(format(lai_dates, "%Y"))
 cat("Trovati", length(lai_files), "file .nc in", lai_dir, "\n")
 if(length(lai_files) == 0) stop("Nessun .nc trovato: controlla nc_dir.")
 
@@ -344,53 +291,118 @@ if(save_intermediate_rds && combine_and_save_RData){
 
 cat("FINE. Controlla la cartella:", out_dir, "\n")
 
-big_dt <- readRDS("C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT_LAI/LAI_pixels_combined.rds")
+#Generic function to read one NetCDF variable
+process_variable_nc_to_dt <- function(nc_path, varname, aoi_vect = NULL){
+  cat("Processing:", nc_path, "...\n")
+  fname <- basename(nc_path)
+  date_val <- extract_date_from_filename(fname)
+  
+  nc <- try(nc_open(nc_path), silent = TRUE)
+  if(inherits(nc, "try-error")) return(NULL)
+  if(!(varname %in% names(nc$var))) {
+    warning("Variabile", varname, "non trovata in:", nc_path)
+    nc_close(nc); return(NULL)
+  }
+  
+  scale_att <- try(ncatt_get(nc, varname, "scale_factor"), silent = TRUE)
+  scale_factor <- if(is.list(scale_att) && !is.null(scale_att$value)) as.numeric(scale_att$value) else NA
+  fill_att <- try(ncatt_get(nc, varname, "_FillValue"), silent = TRUE)
+  fillv <- if(is.list(fill_att) && !is.null(fill_att$value)) as.numeric(fill_att$value) else NA
+  nc_close(nc)
+  
+  r <- try(rast(nc_path, subds = varname), silent = TRUE)
+  if(inherits(r, "try-error")) return(NULL)
+  if(!is.na(scale_factor)) r <- r * scale_factor
+  if(!is.na(fillv)) r[r == fillv] <- NA
+  if(!is.null(aoi_vect)) {
+    r <- crop(r, aoi_vect, snap = "out")
+    r <- mask(r, aoi_vect)
+  }
+  
+  df <- as.data.frame(r, xy = TRUE, na.rm = FALSE)
+  val_col <- setdiff(names(df), c("x","y"))[1]
+  setDT(df)
+  dt <- df[, .(x = get("x"), y = get("y"), value = get(val_col))]
+  dt <- dt[!is.na(value)]
+  dt[, date := date_val]
+  return(dt)
+}
+
+#Apply the function to QFLAG, NOBS, RMSE
+qflag_dir <- file.path(base_dir, "INPUT/nc_files/QFLAG")
+nobs_dir  <- file.path(base_dir, "INPUT/nc_files/NOBS")
+rmse_dir  <- file.path(base_dir, "INPUT/nc_files/RMSE")
+
+read_variable_folder <- function(folder, varname){
+  files <- list.files(folder, pattern = "\\.nc$", full.names = TRUE)
+  dt_list <- lapply(files, function(f) process_variable_nc_to_dt(f, varname, aoi_vect))
+  dt <- rbindlist(dt_list, use.names = TRUE, fill = TRUE)
+  setnames(dt, "value", varname)
+  return(dt)
+}
+
+qflag_dt <- read_variable_folder(qflag_dir, "QFLAG")
+nobs_dt  <- read_variable_folder(nobs_dir, "NOBS")
+rmse_dt  <- read_variable_folder(rmse_dir, "RMSE")
+
+#merge all with LAI
+merged_dt <- readRDS(file.path(out_dir, "LAI_pixels_combined.rds"))
+range(merged_dt$date)               
+table(format(merged_dt$date, "%Y")) 
+
+#save
+saveRDS(merged_dt, file = file.path(out_dir, "LAI_pixels_combined.rds"), compress = "xz")
+
+
+big_dt <- readRDS("C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT/LAI_pixels_combined.rds")
 big_dt[, LAI:=30*LAI]
 print(big_dt)
 str(big_dt)
 head(big_dt)
 names(big_dt)
-#convert in un oggetto spaziale in R con "sf"
-sf_lai <- st_as_sf(big_dt,
-                   coords = c("x", "y"),
-                   crs = 4326)
-#ora sf_lai è un oggetto spaziale che posso visualizzare in R
-plot(sf_lai["LAI"])
 
-st_write(sf_lai, "C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT_LAI/LAI_points.gpkg", delete_dsn = TRUE)
-
-#Create an unique ID for each coordinate pair
+# Create a unique ID for each unique coordinate pair
 big_dt$ID <- match(paste(big_dt$x, big_dt$y), unique(paste(big_dt$x, big_dt$y)))
 
-#"date" is into Date format
-big_dt[, date := as.Date(date)]
-#Create a daily sequence for each ID
-daily_dt <- big_dt[, .(
-  date = seq(min(date), max(date), by = "day")
-), by = ID]
-
-#Interpolation for each ID
-lai_daily <- big_dt[daily_dt, on = .(ID, date), roll = "nearest"]
-lai_daily[, LAI := approx(x = big_dt[ID == .BY$ID]$date,
-                          y = big_dt[ID == .BY$ID]$LAI,
-                          xout = date)$y, by = ID]
 library(ggplot2)
-library(dplyr)
-
-#Plot
-lai_plot <- ggplot(lai_daily, aes(x = date, y = LAI, group = ID, colour = factor(ID))) +
-  geom_line(size = 0.8) + 
-  theme_minimal() +
-  labs(title = "Time Trend LAI",
-       x = "Year",
-       y = "LAI",
-       colour = "ID") + 
-  scale_x_date(date_labels = "%Y", date_breaks = "1 year")
+# plot
+lai_plot <- ggplot(big_dt, aes(x = date, y = LAI, group = ID, color = factor(ID))) +
+  geom_line(size = 0.8)
 
 lai_plot
 
-#GRAFICO TEMPORALE (andamento nel tempo del LAI)
-lai_time <- big_dt %>%
+#filter data
+big_dt_filtered <- big_dt[LAI<6]
+
+lai_plot_filtered <- ggplot(big_dt_filtered, aes(x = date, y = LAI, group = ID, color = factor(ID))) +
+  geom_line(size = 0.8)
+
+lai_plot_filtered
+
+#remove duplicates
+big_dt_filtered <- big_dt_filtered[order(ID, date)]
+big_dt_filtered <- big_dt_filtered[, .SD[!duplicated(date)], by = ID]
+
+# Create a daily date range for each ID
+daily_dates <- big_dt_filtered[, .(date = seq(min(date), max(date), by = "1 day")), by = ID]
+
+# Interpolate LAI for each ID
+daily_lai <- big_dt_filtered[daily_dates, on = .(ID, date), roll = "nearest"]
+daily_lai[, LAI := approx(x = big_dt_filtered[ID == .BY$ID]$date,
+                          y = big_dt_filtered[ID == .BY$ID]$LAI,
+                          xout = date)$y, by = ID]
+
+big_dt_filtered[, .N, by = .(ID, date)][N>1]
+
+
+# View result
+lai_plot_daily <- ggplot(daily_lai, aes(x = date, y = LAI, group = ID, color = factor(ID))) +
+  geom_line(size = 0.8)
+
+lai_plot_daily
+
+#TIME GRAPH (trend time of LAI)
+lai_time <- daily_lai %>%
   group_by(date) %>%
   summarise(mean_LAI=mean(LAI, na.rm = TRUE))
 ggplot(lai_time, aes (x = date, y = mean_LAI)) +
@@ -400,10 +412,10 @@ ggplot(lai_time, aes (x = date, y = mean_LAI)) +
        x = "Year",
        y = "Mean LAI") +
   theme_minimal()
-#mostra come cambia LAI (foglie/vegetazione) nel tempo sull'area
+#it shows how LAI changes over time over area
 
-#Boxplot stagionali o annuali
-lai <- big_dt %>%
+#seasonal or annual Boxplot
+lai <- daily_lai %>%
   mutate(year = format(date, "%Y"),
          month = format(date, "%m"))
 
@@ -414,31 +426,17 @@ ggplot(lai, aes(x = month, y = LAI, group = month)) +
        y = "LAI") +
   theme_minimal()
 
-#if I want to filter years
-big_dt <- big_dt %>%
-  mutate(year = year(date))
-big_dt_sub <- big_dt %>%
-  filter(year >= 2020, year <= 2022)
 
-lai_time_sub <- big_dt_sub %>%
-  group_by(date) %>%
-  summarise(mean_LAI=mean(LAI, na.rm = TRUE))
+#VERIFY
+# Find the closest pixel(ID):
+# Target coordinates
+target_lat <- 39.94033
+target_lon <- -5.77465
 
-ggplot(lai_time_sub, aes (x = date, y = mean_LAI)) +
-  geom_line(color="forestgreen") +
-  geom_point(color="darkgreen") +
-  labs(title = "Time Trend of LAI 2020-2022",
-       x = "Year",
-       y = "Mean LAI") +
-  theme_minimal()
+# Compute distance and find closest ID
+closest <- big_dt_filtered[, .(ID, x, y,
+                               dist = sqrt((x - target_lon)^2 + (y - target_lat)^2))][
+                                 order(dist)][1]
 
-lai_sub <- big_dt_sub %>%
-  mutate(year = format(date, "%Y"),
-         month = format(date, "%m"))
-
-ggplot(lai_sub, aes(x = month, y = LAI, group = month)) +
-  geom_boxplot(fill = "lightgreen", color = "darkgreen") +
-  labs(title = "Monthly mean LAI values 2020-2022",
-       x = "Month",
-       y = "LAI") +
-  theme_minimal()
+# View result
+print(closest)
