@@ -15,21 +15,28 @@ library(dplyr)
 base_dir<- "C:/Users/iacom/Desktop/COPERNICUS_LAI"
 setwd(base_dir)
 
-aoi_path<- file.path(base_dir, "INPUT/AOI/Bounding_Box.shp")
+aoi_path <- file.path(base_dir, "INPUT/AOI/Bounding_Box.shp")
 out_dir <- file.path(base_dir, "OUTPUT_LAI")  # the folder where you save GeoTIFF and metadata
-nc_dir<- file.path(base_dir, "INPUT/nc_files")  # the foldere where you have .nc files
+lai_dir<- file.path(base_dir, "INPUT/nc_files/LAI")  # the foldere where you have .nc files
 
 #setting with resolution and LAI_scale factors
 my_resolution <- 300
 LAI_scaling_factor <- 30
 
 file.exists(aoi_path)
-file.exists(nc_dir)
+file.exists(lai_dir)
 
+#---------------------------------------------------------------------
+#create a LAI folder
 setwd(nc_dir)
-nc1 <- nc_open("c_gls_LAI300_201501100000_GLOBE_PROBAV_V1.0.1__LAI.nc")
-
-print(nc1)
+dir.create(file.path(nc_dir, "LAI"), showWarnings = FALSE)
+all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE)
+file_LAI <- all_files[grepl("__LAI\\.nc$", basename(all_files))]
+for (file in file_LAI) {
+  file.rename(file, file.path(nc_dir, "LAI", basename(file)))
+}
+lai_dir<- file.path(nc_dir, "INPUT/LAI")
+#--------------------------------------------------------------------
 
 #if you don't have it, create output folder
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -39,21 +46,21 @@ setwd(out_dir)
 
 cat("Directory di lavoro impostato su:", getwd(), "\n")
 cat("AOI", aoi_path, "\n")
-cat("File .nc in:", nc_dir, "\n")
+cat("LAI in:", lai_dir, "\n")
 cat("OUTPUT_LAI in:", out_dir, "\n")
 
 #Verify that AOI and file.nc exist
 if(!file.exists(aoi_path)) stop("AOI non trovato! Controlla il percorso:", aoi_path)
-if(!file.exists(nc_dir)) stop("Cartella nc_files non trovata! Controlla il percorso:", nc_dir)
+if(!file.exists(lai_dir)) stop("LAI non trovata! Controlla il percorso:", lai_dir)
 
 # List file .nc 
-#nc_dir is the folder where I put all the files .nc (YEARS)
+#lai_dir is the folder where I put all the files .nc (YEARS)
 #list.files() searches for all files ending in .nc
 #full.names=TRUE returns the full path
 #recursive=TRUE lokks in the sub folders
-nc_files <- list.files(path = nc_dir, pattern = "\\.nc$", full.names = TRUE, recursive = TRUE)
-cat("Trovati", length(nc_files)>0, "File .nc in", nc_dir, "\n")
-head(nc_files, 3)
+lai_files <- list.files(path = lai_dir, pattern = "\\.nc$", full.names = TRUE, recursive = TRUE)
+cat("Trovati", length(lai_files), "File .nc in", lai_dir, "\n")
+head(lai_files, 3)
 
 # Read AOI and take to EPSG:4326
 aoi_sf <- st_read(aoi_path, quiet = TRUE)
@@ -103,8 +110,8 @@ process_one_nc <- function(nc_path, aoi_vect, resolution, extract_qc = FALSE) {
     nc_close(nc)
     return(NULL)
   }
-
-#above it open the .nc file,looks at what variables there are inside (es. LAI, NOBS, RMSE,..)
+  
+  #above it open the .nc file,looks at what variables there are inside (es. LAI, NOBS, RMSE,..)
   #look for the variable that contains the LAI dataand if it doesn't find it, it will warn you
   
   # Reads useful attributes (scale/_FillValue) using "ncatt_get()"
@@ -154,9 +161,9 @@ process_one_nc <- function(nc_path, aoi_vect, resolution, extract_qc = FALSE) {
   } else {
     outname <- file.path(getwd(), sprintf("LAI_%s.tif", format(date_val, "%Y%m%d")))
   }
- writeRaster(r, filename = outname, overwrite = TRUE)
- return(outname)
-    }
+  writeRaster(r, filename = outname, overwrite = TRUE)
+  return(outname)
+}
 
 cat("FINE pipeline.\n")
 
@@ -181,7 +188,7 @@ cat("FINE pipeline.\n")
 # -------------------------- PARAMETERS to change -------------------------
 #the directory of nc and out has already been set
 out_dir <- file.path(base_dir, "OUTPUT_LAI")  # where save GeoTIFF, metadata and .rds / .RData
-nc_dir<- file.path(base_dir, "INPUT/nc_files")  # the folder where there are .nc files
+lai_dir<- file.path(base_dir, "INPUT/nc_files/LAI")  # the folder where there are .nc files
 
 save_intermediate_rds <- TRUE                  # save every files like .rds (reduces RAM)
 combine_and_save_RData <- TRUE                 # finally merge everything and save .RData
@@ -209,9 +216,9 @@ extract_date_from_filename <- function(fname){
 }
 
 # list file .nc
-nc_files <- list.files(path = nc_dir, pattern = "\\.nc$|\\.NC$|\\.nc4$", full.names = TRUE, recursive = TRUE)
-cat("Trovati", length(nc_files), "file .nc in", nc_dir, "\n")
-if(length(nc_files) == 0) stop("Nessun .nc trovato: controlla nc_dir.")
+lai_files <- list.files(path = lai_dir, pattern = "\\.nc$|\\.NC$|\\.nc4$", full.names = TRUE, recursive = TRUE)
+cat("Trovati", length(lai_files), "file .nc in", lai_dir, "\n")
+if(length(lai_files) == 0) stop("Nessun .nc trovato: controlla nc_dir.")
 
 # if defined, load AOI and convert it to SpatVector of "terra"
 aoi_vect <- NULL #verify that the file exist
@@ -287,10 +294,11 @@ process_single_nc_to_dt <- function(nc_path, aoi_vect = NULL){
   return(dt)
 }
 
+library(data.table)
 # Loop on .nc files: save a .rds for each file (hundle a chunk per RAM)
 chunk_files <- character(0)
 i <- 1
-for(nc in nc_files){
+for(nc in lai_files){
   dt <- process_single_nc_to_dt(nc, aoi_vect = aoi_vect)
   if(is.null(dt)) next
   if(save_intermediate_rds){
@@ -336,14 +344,13 @@ if(save_intermediate_rds && combine_and_save_RData){
 
 cat("FINE. Controlla la cartella:", out_dir, "\n")
 
-library(data.table)
 big_dt <- readRDS("C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT_LAI/LAI_pixels_combined.rds")
 big_dt[, LAI:=30*LAI]
 print(big_dt)
 str(big_dt)
 head(big_dt)
 names(big_dt)
-#convertiamolo in un oggetto spaziale in R con "sf"
+#convert in un oggetto spaziale in R con "sf"
 sf_lai <- st_as_sf(big_dt,
                    coords = c("x", "y"),
                    crs = 4326)
@@ -355,15 +362,34 @@ st_write(sf_lai, "C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT_LAI/LAI_points.gp
 #Create an unique ID for each coordinate pair
 big_dt$ID <- match(paste(big_dt$x, big_dt$y), unique(paste(big_dt$x, big_dt$y)))
 
-#Plot
-lai_plot <- ggplot(big_dt, aes(x = date, y = LAI, group = ID, colour = factor(ID))) +
-  geom_line(size = 0.8)
-lai_plot
+#"date" is into Date format
+big_dt[, date := as.Date(date)]
+#Create a daily sequence for each ID
+daily_dt <- big_dt[, .(
+  date = seq(min(date), max(date), by = "day")
+), by = ID]
 
-#GRAFICO TEMPORALE (andamento nel tempo del LAI)
+#Interpolation for each ID
+lai_daily <- big_dt[daily_dt, on = .(ID, date), roll = "nearest"]
+lai_daily[, LAI := approx(x = big_dt[ID == .BY$ID]$date,
+                          y = big_dt[ID == .BY$ID]$LAI,
+                          xout = date)$y, by = ID]
 library(ggplot2)
 library(dplyr)
 
+#Plot
+lai_plot <- ggplot(lai_daily, aes(x = date, y = LAI, group = ID, colour = factor(ID))) +
+  geom_line(size = 0.8) + 
+  theme_minimal() +
+  labs(title = "Time Trend LAI",
+       x = "Year",
+       y = "LAI",
+       colour = "ID") + 
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year")
+
+lai_plot
+
+#GRAFICO TEMPORALE (andamento nel tempo del LAI)
 lai_time <- big_dt %>%
   group_by(date) %>%
   summarise(mean_LAI=mean(LAI, na.rm = TRUE))
