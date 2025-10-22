@@ -11,7 +11,7 @@ library(tidyr)
 #1-set directory
 base_dir<- "C:/Users/iacom/Desktop/COPERNICUS_LAI"
 aoi_path <- file.path(base_dir, "INPUT/AOI/Bounding_Box.shp")
-out_dir <- file.path(base_dir, "OUTPUT")  
+out_dir <- file.path(base_dir, "OUTPUT_FAPAR")  
 dir.create(out_dir, showWarnings = FALSE)
 
 #setting with resolution and LAI_scale factors
@@ -20,16 +20,16 @@ LAI_scaling_factor <- 30
 
 #---------------------------------------------------------------------
 #1.1-create folders
-nc_dir<- file.path(base_dir, "INPUT/nc_files")
+nc_dir<- file.path(base_dir, "INPUT_FAPAR")
 setwd(nc_dir)
-#LAI
-dir.create(file.path(nc_dir, "LAI"), showWarnings = FALSE)
+#FAPAR
+dir.create(file.path(nc_dir, "FAPAR"), showWarnings = FALSE)
 all_files <- list.files(nc_dir, pattern = "\\.nc$", full.names = TRUE, recursive = TRUE)
-file_LAI <- all_files[grepl("__LAI\\.nc$", basename(all_files))]
-for (file in file_LAI) {
-  file.rename(file, file.path(nc_dir, "LAI", basename(file)))
+file_FAPAR <- all_files[grepl("__FAPAR\\.nc$", basename(all_files))]
+for (file in file_FAPAR) {
+  file.rename(file, file.path(nc_dir, "FAPAR", basename(file)))
 }
-lai_dir<- file.path(nc_dir, "INPUT/LAI")
+fapar_dir<- file.path(nc_dir, "INPUT/FAPAR")
 
 #create LENGTH AFTER folder
 dir.create(file.path(nc_dir, "LENGTH_AFTER"), showWarnings = FALSE)
@@ -80,12 +80,12 @@ RMSE_dir<- file.path(nc_dir, "INPUT/RMSE")
 
 #2-Variables folders
 var_dirs <- list(
-  LAI          = file.path(base_dir, "INPUT/nc_files/LAI"),  # the foldere where you have .nc files
-  LENGTH_AFTER = file.path(base_dir, "INPUT/nc_files/LENGTH_AFTER"),
-  LENGTH_BEFORE= file.path(base_dir, "INPUT/nc_files/LENGTH_BEFORE"),
-  NOBS         = file.path(base_dir, "INPUT/nc_files/NOBS"),
-  QFLAG        = file.path(base_dir, "INPUT/nc_files/QFLAG"),
-  RMSE         = file.path(base_dir, "INPUT/nc_files/RMSE")
+  FAPAR        = file.path(base_dir, "INPUT_FAPAR/FAPAR"),  # the foldere where you have .nc files
+  LENGTH_AFTER = file.path(base_dir, "INPUT_FAPAR/LENGTH_AFTER"),
+  LENGTH_BEFORE= file.path(base_dir, "INPUT_FAPAR/LENGTH_BEFORE"),
+  NOBS         = file.path(base_dir, "INPUT_FAPAR/NOBS"),
+  QFLAG        = file.path(base_dir, "INPUT_FAPAR/QFLAG"),
+  RMSE         = file.path(base_dir, "INPUT_FAPAR/RMSE")
 )
 
 #3-move the directory to OUTPUT_LAI where I'll save the results
@@ -197,18 +197,18 @@ if(all(c("NOBS", "QFLAG", "RMSE") %in% vars_in_output)) {
   cat("WARNING: Not all variables (NOBS, QFLAG, RMSE) are present in the output table.\n")
 }
 
-saveRDS(big_dt, file = file.path(out_dir, "combined_timeseries.rds"), compress = "xz")
-data.table::fwrite(big_dt, file = file.path(out_dir, "combined_timeseries.csv"))
+saveRDS(big_dt, file = file.path(out_dir, "FAPAR_combined_timeseries.rds"), compress = "xz")
+data.table::fwrite(big_dt, file = file.path(out_dir, "FAPAR_combined_timeseries.csv"))
 cat("Final files saved in:", out_dir, "\n")
 
 #10-load unique table with all the variables
-raw_dt <- readRDS("C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT/combined_timeseries.rds")
+raw_dt <- readRDS("C:/Users/iacom/Desktop/COPERNICUS_LAI/OUTPUT_FAPAR/FAPAR_combined_timeseries.rds")
 #first visualization
 cat("Names in big_dt:", names(raw_dt), "\n")
 cat("Variables present:", paste(unique(raw_dt$variable), collapse = ", "), "\n")
 
 #11-Divide variables for join
-lai_dt <- raw_dt[variable == "LAI", .(x, y, date, LAI_value = value)]
+fapar_dt <- raw_dt[variable == "FAPAR", .(x, y, date, FAPAR_value = value)]
 qflag_dt <- raw_dt [variable == "QFLAG", .(x, y, date, QFLAG = value)]
 rmse_dt <- raw_dt[variable == "RMSE", .(x, y, date, RMSE = value)]
 nobs_dt <- raw_dt[variable == "NOBS", .(x, y, date, NOBS = value)]
@@ -216,44 +216,56 @@ length_before_dt <- raw_dt[variable == "LENGTH_BEFORE", .(x, y, date, LENGTH_BEF
 length_after_dt <- raw_dt[variable == "LENGTH_AFTER", .(x, y, date, LENGTH_AFTER = value)]
 
 #remove duplicates
-lai_dt <- unique(lai_dt, by = c("x", "y", "date"))
+fapar_dt <- unique(fapar_dt, by = c("x", "y", "date"))
 qflag_dt <- unique(qflag_dt, by = c("x", "y", "date"))
 rmse_dt <- unique(rmse_dt, by = c("x", "y", "date"))
 nobs_dt <- unique(nobs_dt, by = c("x", "y", "date"))
 length_before_dt <- unique(length_before_dt, by = c("x", "y", "date"))
 length_after_dt <- unique(length_after_dt, by = c("x", "y", "date"))
-cat(sprintf("   - Righe LAI (unique): %d\n", nrow(lai_dt)))
+cat(sprintf("   - Righe FAPAR (unique): %d\n", nrow(fapar_dt)))
 
 #merge LAI con the other variables
-lai_combined_dt <- merge(lai_dt, qflag_dt, by = c("x", "y", "date"), all.x = TRUE)
-lai_combined_dt <- merge(lai_combined_dt, rmse_dt, by = c("x", "y", "date"), all.x = TRUE)
-lai_combined_dt <- merge(lai_combined_dt, nobs_dt, by = c("x", "y", "date"), all.x = TRUE)
-lai_combined_dt <- merge(lai_combined_dt, length_before_dt, by = c("x", "y", "date"), all.x = TRUE)
-lai_combined_dt <- merge(lai_combined_dt, length_after_dt, by = c("x", "y", "date"), all.x = TRUE)
+fapar_combined_dt <- merge(fapar_dt, qflag_dt, by = c("x", "y", "date"), all.x = TRUE)
+fapar_combined_dt <- merge(fapar_combined_dt, rmse_dt, by = c("x", "y", "date"), all.x = TRUE)
+fapar_combined_dt <- merge(fapar_combined_dt, nobs_dt, by = c("x", "y", "date"), all.x = TRUE)
+fapar_combined_dt <- merge(fapar_combined_dt, length_before_dt, by = c("x", "y", "date"), all.x = TRUE)
+fapar_combined_dt <- merge(fapar_combined_dt, length_after_dt, by = c("x", "y", "date"), all.x = TRUE)
 
-cat("Righe totali dopo il merge:", nrow(lai_combined_dt), "\n")
-cat("Valori unici di QFLAG:", paste(unique(lai_combined_dt$QFLAG), collapse = ", "), "\n")
-cat("Min/Max NOBS:", min(lai_combined_dt$NOBS, na.rm = TRUE), "/", max(lai_combined_dt$NOBS, na.rm = TRUE), "\n")
-cat("Min/Max RMSE:", min(lai_combined_dt$RMSE, na.rm = TRUE), "/", max(lai_combined_dt$RMSE, na.rm = TRUE), "\n")
+cat("Righe totali dopo il merge:", nrow(fapar_combined_dt), "\n")
+cat("Valori unici di QFLAG:", paste(unique(fapar_combined_dt$QFLAG), collapse = ", "), "\n")
+cat("Min/Max NOBS:", min(fapar_combined_dt$NOBS, na.rm = TRUE), "/", max(fapar_combined_dt$NOBS, na.rm = TRUE), "\n")
+cat("Min/Max RMSE:", min(fapar_combined_dt$RMSE, na.rm = TRUE), "/", max(fapar_combined_dt$RMSE, na.rm = TRUE), "\n")
 
 #apply quality filter
-lai_combined_dt_filtered <- lai_combined_dt[
+fapar_combined_dt_filtered <- fapar_combined_dt[
   QFLAG %in% c(0, 1) &
-    LAI_value <= 6 & 
     RMSE < 1,
 ]
 
 #rename value
-lai_dt <- lai_combined_dt_filtered
+fapar_dt <- fapar_combined_dt_filtered
 #scaling
-lai_dt[, value := 30*LAI_value]
+summary(fapar_combined_dt_filtered$FAPAR_value)
+fapar_dt[, value := 1000*FAPAR_value]
 #ID
-lai_dt$ID <- match(paste(lai_dt$x, lai_dt$y), unique(paste(lai_dt$x, lai_dt$y)))
-lai_dt[, LAI_value := NULL]
-lai_dt[, variable := "LAI"]
+fapar_dt$ID <- match(paste(fapar_dt$x, fapar_dt$y), unique(paste(fapar_dt$x, fapar_dt$y)))
+fapar_dt[, FAPAR_value := NULL]
+fapar_dt[, variable := "FAPAR"]
 
 #12-plot
-lai_plot <- ggplot(lai_dt, aes(x = date, y = value, group = ID, color = factor(ID))) +
+fapar_plot <- ggplot(fapar_dt, aes(x = date, y = value, group = ID, color = factor(ID))) +
+  geom_line(linewidth = 0.8) +
+  labs(title = "Time Series filtered FAPAR (per Pixel)",
+       x = "Data",
+       y = "scaled FAPAR (x1000)",
+       color = "ID pixel") +
+  theme_minimal()
+
+fapar_plot
+#-------------------------------------------------------------------
+#graphic corrected
+lai_dt_filtered <- lai_dt[value<6] #devo farlo anche per FAPAR #INFORMATI!
+lai_plot_filtered <- ggplot(lai_dt_filtered, aes(x = date, y = value, group = ID, color = factor(ID))) +
   geom_line(linewidth = 0.8) +
   labs(title = "Temporal series filtered LAI (per Pixel)",
        x = "Data",
@@ -261,31 +273,20 @@ lai_plot <- ggplot(lai_dt, aes(x = date, y = value, group = ID, color = factor(I
        color = "ID pixel") +
   theme_minimal()
 
-lai_plot
-#graphic corrected
-lai_dt_filtered <- lai_dt[value<6]
-lai_plot_filtered <- ggplot(lai_dt_filtered, aes(x = date, y = value, group = ID, color = factor(ID))) +
-  geom_line(size = 0.8) +
-  labs(title = "Temporal series filtered LAI (per Pixel)",
-       x = "Data",
-       y = "scaled LAI",
-       color = "ID pixel") +
-  theme_minimal()
-
 lai_plot_filtered
-
+#-------------------------------------------------------------
 #13-Daily interpolation
 #convert date
-lai_dt_filtered[, date := as.Date(date)]
+fapar_dt <- fapar_dt[, date := as.Date(date)]
 #order and remove final duplicates per ID/date
-setorder(lai_dt_filtered, ID, date)
-lai_dt_filtered <- lai_dt_filtered[, .SD[!duplicated(date)], by = ID]
+setorder(fapar_dt, ID, date)
+fapar_dt <- fapar_dt[, .SD[!duplicated(date)], by = ID]
 # Create a daily date range for each ID
-daily_dates <- lai_dt_filtered[, .(date = seq(min(date), max(date), by = "1 day")), by = ID]
+daily_dates <- fapar_dt[, .(date = seq(min(date), max(date), by = "1 day")), by = ID]
 
 #option 1 Interpolate LAI for each ID with approxfun
-daily_lai <- daily_dates[, {
-  od <- lai_dt_filtered[ID == .BY$ID]
+daily_fapar <- daily_dates[, {
+  od <- fapar_dt[ID == .BY$ID]
   if(nrow(od) < 2) {
     .(date = date, value = NA_real_)
   } else {
@@ -295,45 +296,45 @@ daily_lai <- daily_dates[, {
 }, by = ID]
 
 #add coordinates
-coords <- unique(lai_dt_filtered[, .(ID, x, y)])
-daily_lai <- merge(daily_lai, coords, by = "ID", all.x = TRUE)
+coords <- unique(fapar_dt[, .(ID, x, y)])
+daily_fapar <- merge(daily_fapar, coords, by = "ID", all.x = TRUE)
 
 #14-View result
-lai_plot_daily <- ggplot(daily_lai, aes(x = date, y = value, group = ID, color = factor(ID))) +
+fapar_plot_daily <- ggplot(daily_fapar, aes(x = date, y = value, group = ID, color = factor(ID))) +
   geom_line(linewidth = 0.8) +
-  labs(title = "Time series interpolate LAI (daily per Pixel)",
+  labs(title = "Time series interpolate FAPAR (daily per Pixel)",
        x = "Date",
-       y = "LAI (interpolate)",
+       y = "FAPAR (interpolate)",
        color = "ID Pixel") +
   theme_minimal()
 
-lai_plot_daily
+fapar_plot_daily
 
 
-
+###
 #TIME GRAPH (trend time of LAI)
-lai_time <- daily_lai %>%
+fapar_time <- daily_fapar %>%
   group_by(date) %>%
-  summarise(mean_LAI=mean(value, na.rm = TRUE))
-ggplot(lai_time, aes (x = date, y = mean_LAI)) +
+  summarise(mean_FAPAR=mean(value, na.rm = TRUE))
+ggplot(fapar_time, aes (x = date, y = mean_FAPAR)) +
   geom_line(color="forestgreen") +
   geom_point(color="darkgreen") +
-  labs(title = "Time Trend of LAI",
+  labs(title = "Time Trend of FAPAR",
        x = "Year",
-       y = "Mean LAI") +
+       y = "Mean FAPAR") +
   theme_minimal()
 #it shows how LAI changes over time over area
 
 #seasonal or annual Boxplot
-lai_box <- daily_lai %>%
+fapar_box <- daily_fapar %>%
   mutate(year = format(date, "%Y"),
          month = format(date, "%m"))
 
-ggplot(lai_box, aes(x = month, y = value, group = month)) +
+ggplot(fapar_box, aes(x = month, y = value, group = month)) +
   geom_boxplot(fill = "lightgreen", color = "darkgreen") +
   labs(title = "Monthly mean LAI values",
        x = "Month",
-       y = "LAI") +
+       y = "FAPAR") +
   theme_minimal()
 
 
